@@ -70,7 +70,7 @@ def main():
     optimizer = torch.optim.AdamW(model.classifier.parameters(), lr=1e-3, weight_decay=1e-4)
 
     # --- train ---
-    for epoch in range(1, 6):
+    for epoch in range(1, 41):
         tr_loss = train_one_epoch(model, train_loader, optimizer, device)
         metrics = evaluate(model, val_loader, device)
         print(f"Epoch {epoch}: train_loss={tr_loss:.4f} val_loss={metrics['loss']:.4f} val_acc={metrics['acc']:.4f}")

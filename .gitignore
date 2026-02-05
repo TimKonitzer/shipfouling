@@ -1,0 +1,7 @@
+# Dataset images (keep local)
+data/images/
+# Local label exports
+/data/label.json
+/data/label_reviewed.json
+# Local checkpoints
+/checkpoints/dinov2_linear_probe.pt

@@ -14,7 +14,7 @@ from src.training.eval import evaluate
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train linear probe on DINOv2 embeddings.")
-    parser.add_argument("--backbone", default="dinov2_vitb14", help="e.g. dinov2_vits14, dinov2_vitb14")
+    parser.add_argument("--backbone", default="dinov2_vits14", help="e.g. dinov2_vits14, dinov2_vitb14")
     parser.add_argument("--epochs", type=int, default=15)
     parser.add_argument("--patience", type=int, default=5)
     parser.add_argument("--disable-early-stopping", action="store_true")

@@ -50,14 +50,14 @@ def main():
 
     # --- load DINOv2 backbone from torch.hub ---
     # NOTE: requires internet once for download.
-    backbone = torch.hub.load("facebookresearch/dinov2", "dinov2_vits14")
+    backbone = torch.hub.load("facebookresearch/dinov2", "dinov2_vitb14")
     backbone.eval()
 
     # Freeze backbone
     for p in backbone.parameters():
         p.requires_grad = False
 
-    # Determine embedding dim (ViT-S/14 usually 384)
+    # Determine embedding dim (inferred by a dummy forward)
     # We'll infer it by a dummy forward.
     dummy = torch.randn(1, 3, 224, 224)
     with torch.no_grad():
@@ -83,7 +83,7 @@ def main():
     torch.save(
         {
             "model_state_dict": model.state_dict(),
-            "backbone": "dinov2_vits14",
+            "backbone": "dinov2_vitb14",
             "num_classes": 5,
             "img_size": 224,
             "epoch": epoch,

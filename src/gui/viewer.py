@@ -131,7 +131,7 @@ class ImageModelViewer(tk.Tk):
 
 def resolve_default_checkpoint(project_root: Path) -> Path:
     ckpt_dir = project_root / "checkpoints"
-    preferred = ckpt_dir / "dinov2_linear_probe_best.pt"
+    preferred = ckpt_dir / "dinov2_vits14_linear_probe_best.pt"
     if preferred.exists():
         return preferred
 
@@ -139,7 +139,7 @@ def resolve_default_checkpoint(project_root: Path) -> Path:
     if best_candidates:
         return max(best_candidates, key=lambda p: p.stat().st_mtime)
 
-    fallback = ckpt_dir / "dinov2_linear_probe.pt"
+    fallback = ckpt_dir / "dinov2_vits14_linear_probe_best.pt"
     if fallback.exists():
         return fallback
 

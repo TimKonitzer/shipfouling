@@ -23,6 +23,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-workers", type=int, default=8)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-4)
+    parser.add_argument("--unfreeze-last-n", type=int, default=0)
     return parser.parse_args()
 
 
@@ -69,9 +70,13 @@ def main():
     backbone = torch.hub.load("facebookresearch/dinov2", backbone_name)
     backbone.eval()
 
-    # Freeze backbone
-    for p in backbone.parameters():
+    # Freeze backbone by default, allow unfreezing last N parameters.
+    backbone_params = list(backbone.parameters())
+    for p in backbone_params:
         p.requires_grad = False
+    if args.unfreeze_last_n > 0:
+        for p in backbone_params[-args.unfreeze_last_n :]:
+            p.requires_grad = True
 
     # Determine embedding dim (inferred by a dummy forward)
     # We'll infer it by a dummy forward.
@@ -83,9 +88,8 @@ def main():
 
     model = DinoV2LinearClassifier(backbone=backbone, embed_dim=embed_dim, num_classes=num_classes).to(device)
 
-    optimizer = torch.optim.AdamW(
-        model.classifier.parameters(), lr=args.lr, weight_decay=args.weight_decay
-    )
+    trainable_params = [p for p in model.parameters() if p.requires_grad]
+    optimizer = torch.optim.AdamW(trainable_params, lr=args.lr, weight_decay=args.weight_decay)
 
     # --- train ---
     ckpt_dir = project_root / "checkpoints"

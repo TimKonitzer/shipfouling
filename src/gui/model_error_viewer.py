@@ -14,6 +14,7 @@ from src.inference.predict import build_model_from_checkpoint, predict_image
 
 
 NUM_CLASSES = 5
+MAX_IMAGES = 500
 
 CLASS_NAMES = {
     0: "0 - Clean",
@@ -26,7 +27,7 @@ CLASS_NAMES = {
 
 def resolve_default_checkpoint(project_root: Path) -> Path:
     ckpt_dir = project_root / "checkpoints"
-    preferred = ckpt_dir / "dinov2_vitb14_linear_probe_best.pt"
+    preferred = ckpt_dir / "dinov2_vits14_linear_probe_best.pt"
     if preferred.exists():
         return preferred
 
@@ -106,6 +107,8 @@ class ModelErrorViewer(tk.Tk):
                     "target": probs,
                 }
             )
+            if len(items) >= MAX_IMAGES:
+                break
 
         items.sort(key=lambda x: x["loss"], reverse=True)
         return items

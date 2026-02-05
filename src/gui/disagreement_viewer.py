@@ -92,11 +92,9 @@ def disagreement_score(votes: List[Tuple[int, Optional[int]]]) -> float:
     if not votes:
         return -1.0
     p = soft_dist(votes)
-    ent = 0.0
-    for v in p:
-        if v > 0:
-            ent -= v * math.log2(v)
-    return ent
+    mean = sum(i * p[i] for i in range(NUM_CLASSES))
+    var = sum(((i - mean) ** 2) * p[i] for i in range(NUM_CLASSES))
+    return var
 
 
 class DisagreementViewer(tk.Tk):
@@ -224,7 +222,7 @@ class DisagreementViewer(tk.Tk):
 
         self.title_lbl.config(text=f"[{self.idx+1}/{len(self.items)}] {item['image']}")
         self.meta_lbl.config(
-            text=f"Disagreement (entropy): {item['score']:.3f} | Votes: {item['vote_count']}"
+            text=f"Disagreement (distance-aware): {item['score']:.3f} | Votes: {item['vote_count']}"
         )
 
         self.ann_list.delete(0, tk.END)

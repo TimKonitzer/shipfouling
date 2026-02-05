@@ -13,7 +13,7 @@ class ShipFoulingDataset(Dataset):
     """
     Returns:
       image_tensor: torch.FloatTensor [3,H,W]
-      target_probs: torch.FloatTensor [6]   (soft labels)
+      target_probs: torch.FloatTensor [5]   (soft labels)
       meta: dict with filename + etc.
     """
 

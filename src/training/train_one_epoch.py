@@ -3,7 +3,7 @@ import torch.nn.functional as F
 
 
 def soft_target_loss(logits: torch.Tensor, target_probs: torch.Tensor) -> torch.Tensor:
-    # logits: [B,6], target_probs: [B,6]
+    # logits: [B,C], target_probs: [B,C]
     log_probs = F.log_softmax(logits, dim=1)
     return F.kl_div(log_probs, target_probs, reduction="batchmean")
 

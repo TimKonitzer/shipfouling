@@ -85,7 +85,11 @@ def soft_label_from_annotations(anns, num_classes: int = NUM_CLASSES):
     counts = np.zeros(num_classes, dtype=np.float32)
 
     # find max confidence present in this image (to normalize)
-    confs = [a.get("confidence_grade") for a in anns if isinstance(a.get("confidence_grade"), int)]
+    confs = [
+        a.get("confidence_grade")
+        for a in anns
+        if isinstance(a.get("confidence_grade"), int) and a.get("confidence_grade") >= 0
+    ]
     max_conf = max(confs) if confs else None
 
     for a in anns:
@@ -95,7 +99,7 @@ def soft_label_from_annotations(anns, num_classes: int = NUM_CLASSES):
         if g is None or not (0 <= g < num_classes):
             continue
 
-        if isinstance(c, int) and max_conf and max_conf > 0:
+        if isinstance(c, int) and c >= 0 and max_conf and max_conf > 0:
             w = float(c) / float(max_conf)  # normalized to [0,1]
             if w <= 0:
                 w = 0.1  # avoid 0-weight if someone uses 0

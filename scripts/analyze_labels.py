@@ -51,7 +51,7 @@ def parse_annotation(ann: Dict[str, Any]) -> Optional[Tuple[int, Optional[int], 
         if key in by_from:
             conf = _parse_leading_int(_get_choice(by_from[key]))
             break
-    if conf is not None and not (0 <= conf <= 5):
+    if conf is not None and conf < 0:
         conf = None
 
     completed_by = ann.get("completed_by")
@@ -68,11 +68,11 @@ def entropy(probs: np.ndarray, eps: float = 1e-12) -> float:
 
 def soft_dist(votes: List[Tuple[int, Optional[int]]]) -> np.ndarray:
     counts = np.zeros(NUM_CLASSES, dtype=np.float64)
-    confs = [c for (_g, c) in votes if isinstance(c, int)]
+    confs = [c for (_g, c) in votes if isinstance(c, int) and c >= 0]
     max_conf = max(confs) if confs else None
 
     for g, c in votes:
-        if c is not None and max_conf and max_conf > 0:
+        if c is not None and c >= 0 and max_conf and max_conf > 0:
             w = float(c) / float(max_conf)
             if w <= 0:
                 w = 0.1
@@ -135,8 +135,6 @@ def main():
             vote_annotators.append(completed_by)
 
             raw_vote_counts[grade] += 1
-            w = (conf + 1) / 6.0 if conf is not None else 1.0
-            conf_weighted_counts[grade] += w
 
             if completed_by is not None:
                 annotator_counts[completed_by] += 1
@@ -148,6 +146,17 @@ def main():
             continue
 
         num_images_with_any_vote += 1
+
+        confs = [c for (_g, c) in votes if isinstance(c, int) and c >= 0]
+        max_conf = max(confs) if confs else None
+        for g, c in votes:
+            if c is not None and c >= 0 and max_conf and max_conf > 0:
+                w = float(c) / float(max_conf)
+                if w <= 0:
+                    w = 0.1
+            else:
+                w = 1.0
+            conf_weighted_counts[g] += w
 
         # per-image soft distribution + entropy
         p = soft_dist(votes)
@@ -199,7 +208,7 @@ def main():
         ent = np.array(image_entropy, dtype=np.float64)
         agr = np.array(image_majority_agreement, dtype=np.float64)
 
-        # Max entropy for 6 classes is log2(6)
+        # Max entropy for NUM_CLASSES classes is log2(NUM_CLASSES)
         max_ent = math.log2(NUM_CLASSES)
 
         print("\n--- Annotator disagreement / uncertainty (per image) ---")

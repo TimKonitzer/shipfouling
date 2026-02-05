@@ -7,6 +7,7 @@ from PIL import Image
 from torchvision import transforms
 
 from src.models.dinov2_classifier import DinoV2LinearClassifier
+from src.data.transforms import IMAGENET_MEAN, IMAGENET_STD
 
 
 def build_model_from_checkpoint(ckpt_path: Path, device: str):
@@ -36,6 +37,7 @@ def build_model_from_checkpoint(ckpt_path: Path, device: str):
         [
             transforms.Resize((img_size, img_size)),
             transforms.ToTensor(),
+            transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD),
         ]
     )
 

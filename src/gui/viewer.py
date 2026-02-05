@@ -129,11 +129,32 @@ class ImageModelViewer(tk.Tk):
         self.image_label.config(image=self._photo)
 
 
+def resolve_default_checkpoint(project_root: Path) -> Path:
+    ckpt_dir = project_root / "checkpoints"
+    preferred = ckpt_dir / "dinov2_linear_probe_best.pt"
+    if preferred.exists():
+        return preferred
+
+    best_candidates = list(ckpt_dir.glob("*_best.pt"))
+    if best_candidates:
+        return max(best_candidates, key=lambda p: p.stat().st_mtime)
+
+    fallback = ckpt_dir / "dinov2_linear_probe.pt"
+    if fallback.exists():
+        return fallback
+
+    other_candidates = list(ckpt_dir.glob("*.pt"))
+    if other_candidates:
+        return max(other_candidates, key=lambda p: p.stat().st_mtime)
+
+    return preferred
+
+
 def main():
     project_root = Path(__file__).resolve().parent.parent.parent
     images_dir = project_root / "data" / "images"
     label_json = project_root / "data" / "label.json"
-    ckpt_path = project_root / "checkpoints" / "dinov2_linear_probe.pt"
+    ckpt_path = resolve_default_checkpoint(project_root)
 
     app = ImageModelViewer(images_dir=images_dir, label_json=label_json, ckpt_path=ckpt_path)
     app.mainloop()

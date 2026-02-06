@@ -2,6 +2,6 @@
 data/images/
 # Local label exports
 /data/label.json
-/data/label_reviewed.json
+/data/label.json
 # Local checkpoints
 /checkpoints/dinov2_linear_probe.pt

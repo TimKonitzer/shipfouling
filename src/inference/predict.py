@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from PIL import Image
 from torchvision import transforms
 
-from src.models.dinov2_classifier import DinoV2LinearClassifier
+from src.models.dinov2_classifier import LinearClassifier
 from src.data.transforms import IMAGENET_MEAN, IMAGENET_STD
 
 
@@ -17,7 +17,17 @@ def build_model_from_checkpoint(ckpt_path: Path, device: str):
     num_classes = int(ckpt.get("num_classes", 5))
     img_size = int(ckpt.get("img_size", 224))
 
-    backbone = torch.hub.load("facebookresearch/dinov2", backbone_name)
+    # build backbone – support both DINOv2 (torch.hub) and torchvision ResNet50
+    if backbone_name.startswith("dinov2_"):
+        backbone = torch.hub.load("facebookresearch/dinov2", backbone_name)
+    elif backbone_name == "resnet50":
+        from torchvision.models import resnet50
+
+        backbone = resnet50(pretrained=True)
+        backbone.fc = torch.nn.Identity()
+    else:
+        raise ValueError(f"unsupported backbone '{backbone_name}' in checkpoint")
+
     backbone.eval()
     for p in backbone.parameters():
         p.requires_grad = False
@@ -28,7 +38,7 @@ def build_model_from_checkpoint(ckpt_path: Path, device: str):
         out = backbone(dummy)
     embed_dim = out.shape[-1]
 
-    model = DinoV2LinearClassifier(backbone=backbone, embed_dim=embed_dim, num_classes=num_classes)
+    model = LinearClassifier(backbone=backbone, embed_dim=embed_dim, num_classes=num_classes)
     model.load_state_dict(ckpt["model_state_dict"])
     model.to(device)
     model.eval()

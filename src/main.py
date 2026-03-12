@@ -7,14 +7,14 @@ from torch.utils.data import DataLoader, random_split
 from src.data.labelstudio_parser import load_labelstudio_json
 from src.data.dataset import ShipFoulingDataset
 from src.data.transforms import get_train_transforms, get_val_transforms
-from src.models.dinov2_classifier import DinoV2LinearClassifier
+from src.models.dinov2_classifier import LinearClassifier
 from src.training.train_one_epoch import train_one_epoch
 from src.training.eval import evaluate
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train linear probe on DINOv2 embeddings.")
-    parser.add_argument("--backbone", default="dinov2_vits14", help="e.g. dinov2_vits14, dinov2_vitb14")
+    parser = argparse.ArgumentParser(description="Train linear probe on top of a backbone (DINOv2 or ResNet50).")
+    parser.add_argument("--backbone", default="dinov2_vits14", help="e.g. dinov2_vits14, resnet50, etc.")
     parser.add_argument("--epochs", type=int, default=15)
     parser.add_argument("--patience", type=int, default=5)
     parser.add_argument("--disable-early-stopping", action="store_true")
@@ -64,10 +64,20 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print("Device:", device)
 
-    # --- load DINOv2 backbone from torch.hub ---
-    # NOTE: requires internet once for download.
+    # --- load backbone ---
     backbone_name = args.backbone
-    backbone = torch.hub.load("facebookresearch/dinov2", backbone_name)
+    if backbone_name.startswith("dinov2_"):
+        # old behavior: download from torch.hub
+        backbone = torch.hub.load("facebookresearch/dinov2", backbone_name)
+    elif backbone_name == "resnet50":
+        # simple ResNet50 from torchvision, drop original classifier
+        from torchvision.models import resnet50
+
+        backbone = resnet50(pretrained=True)
+        backbone.fc = torch.nn.Identity()
+    else:
+        raise ValueError(f"unsupported backbone '{backbone_name}'")
+
     backbone.eval()
 
     # Freeze backbone by default, allow unfreezing last N parameters.
@@ -78,15 +88,15 @@ def main():
         for p in backbone_params[-args.unfreeze_last_n :]:
             p.requires_grad = True
 
-    # Determine embedding dim (inferred by a dummy forward)
-    # We'll infer it by a dummy forward.
+    # determine embedding dim by running a dummy input
     dummy = torch.randn(1, 3, args.img_size, args.img_size)
     with torch.no_grad():
         out = backbone(dummy)
+    # ResNet returns [B,2048] after avgpool+fc=Identity, DINOv2 returns [B,D]
     embed_dim = out.shape[-1]
     print("Embed dim:", embed_dim)
 
-    model = DinoV2LinearClassifier(backbone=backbone, embed_dim=embed_dim, num_classes=num_classes).to(device)
+    model = LinearClassifier(backbone=backbone, embed_dim=embed_dim, num_classes=num_classes).to(device)
 
     trainable_params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(trainable_params, lr=args.lr, weight_decay=args.weight_decay)

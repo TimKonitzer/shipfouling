@@ -1,8 +1,15 @@
-import argparse
+import argparse 
+import sys
 from pathlib import Path
 
 import torch
-from torch.utils.data import DataLoader, random_split
+
+project_root = Path(__file__).resolve().parent.parent
+if str(project_root) not in sys.path:
+    sys.path.append(str(project_root))
+from torch.utils.data import DataLoader, random_split, WeightedRandomSampler
+from tqdm import tqdm
+import numpy as np
 
 from src.data.labelstudio_parser import load_labelstudio_json
 from src.data.dataset import ShipFoulingDataset
@@ -24,26 +31,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--unfreeze-last-n", type=int, default=0)
+    parser.add_argument("--pretrained-encoder", type=str, default=None, help="Path to custom pretrained encoder .pt file")
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
-    # --- paths ---
     project_root = Path(__file__).resolve().parent.parent
     data_dir = project_root / "data"
     images_dir = data_dir / "images"
     label_path = data_dir / "label.json"
     num_classes = 5
 
-    # --- load json ---
     raw_entries = load_labelstudio_json(label_path)
 
-    # --- transforms ---
     train_tf = get_train_transforms(args.img_size)
     val_tf = get_val_transforms(args.img_size)
 
-    # --- dataset ---
     full_ds_train = ShipFoulingDataset(
         images_dir=images_dir, raw_entries=raw_entries, transform=train_tf, num_classes=num_classes
     )
@@ -58,19 +62,40 @@ def main():
     train_ds, _ = random_split(full_ds_train, [n_train, n_val], generator=torch.Generator().manual_seed(42))
     _, val_ds = random_split(full_ds_val, [n_train, n_val], generator=torch.Generator().manual_seed(42))
 
-    train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
-    val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
+    train_indices = train_ds.indices
+    train_labels = []
+    for idx in train_indices:
+        _fname, probs = full_ds_train.samples[idx]
+        train_labels.append(np.argmax(probs))
+    
+    class_counts = np.bincount(train_labels, minlength=num_classes)
+    class_weights = 1.0 / (np.sqrt(class_counts) + 1e-6)
+    sample_weights = [class_weights[label] for label in train_labels]
+    
+    sampler = WeightedRandomSampler(sample_weights, len(sample_weights), replacement=True)
+
+    train_loader = DataLoader(
+        train_ds, 
+        batch_size=args.batch_size, 
+        sampler=sampler, 
+        num_workers=args.num_workers,
+        pin_memory=True
+    )
+    val_loader = DataLoader(
+        val_ds, 
+        batch_size=args.batch_size, 
+        shuffle=False, 
+        num_workers=args.num_workers,
+        pin_memory=True
+    )
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print("Device:", device)
 
-    # --- load backbone ---
     backbone_name = args.backbone
     if backbone_name.startswith("dinov2_"):
-        # old behavior: download from torch.hub
         backbone = torch.hub.load("facebookresearch/dinov2", backbone_name)
     elif backbone_name == "resnet50":
-        # simple ResNet50 from torchvision, drop original classifier
         from torchvision.models import resnet50
 
         backbone = resnet50(pretrained=True)
@@ -78,9 +103,12 @@ def main():
     else:
         raise ValueError(f"unsupported backbone '{backbone_name}'")
 
+    if getattr(args, "pretrained_encoder", None):
+        print(f"Loading custom pretrained encoder from {args.pretrained_encoder}")
+        state_dict = torch.load(args.pretrained_encoder, map_location="cpu")
+        backbone.load_state_dict(state_dict)
     backbone.eval()
 
-    # Freeze backbone by default, allow unfreezing last N parameters.
     backbone_params = list(backbone.parameters())
     for p in backbone_params:
         p.requires_grad = False
@@ -88,11 +116,9 @@ def main():
         for p in backbone_params[-args.unfreeze_last_n :]:
             p.requires_grad = True
 
-    # determine embedding dim by running a dummy input
     dummy = torch.randn(1, 3, args.img_size, args.img_size)
     with torch.no_grad():
         out = backbone(dummy)
-    # ResNet returns [B,2048] after avgpool+fc=Identity, DINOv2 returns [B,D]
     embed_dim = out.shape[-1]
     print("Embed dim:", embed_dim)
 
@@ -100,8 +126,8 @@ def main():
 
     trainable_params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(trainable_params, lr=args.lr, weight_decay=args.weight_decay)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
 
-    # --- train ---
     ckpt_dir = project_root / "checkpoints"
     ckpt_dir.mkdir(exist_ok=True)
     base_name = f"{backbone_name}_linear_probe"
@@ -114,12 +140,36 @@ def main():
     last_val_loss = None
 
     for epoch in range(1, args.epochs + 1):
-        tr_loss = train_one_epoch(model, train_loader, optimizer, device)
+        pbar = tqdm(train_loader, desc=f"Epoch {epoch}/{args.epochs} [Train]")
+        model.train()
+        epoch_tr_loss = 0.0
+        n_samples = 0
+        
+        for images, targets, _meta in pbar:
+            images, targets = images.to(device), targets.to(device)
+            optimizer.zero_grad(set_to_none=True)
+            logits = model(images)
+            from src.training.train_one_epoch import soft_target_loss
+            loss = soft_target_loss(logits, targets)
+            loss.backward()
+            optimizer.step()
+            
+            bs = images.size(0)
+            epoch_tr_loss += float(loss.item()) * bs
+            n_samples += bs
+            pbar.set_postfix({"loss": f"{loss.item():.4f}"})
+        
+        tr_loss = epoch_tr_loss / max(n_samples, 1)
+        
         metrics = evaluate(model, val_loader, device)
         val_loss = float(metrics["loss"])
         last_epoch = epoch
         last_val_loss = val_loss
-        print(f"Epoch {epoch}: train_loss={tr_loss:.4f} val_loss={val_loss:.4f} val_acc={metrics['acc']:.4f}")
+        
+        scheduler.step()
+        curr_lr = optimizer.param_groups[0]['lr']
+        
+        print(f"Epoch {epoch}: train_loss={tr_loss:.4f} val_loss={val_loss:.4f} val_acc={metrics['acc']:.4f} lr={curr_lr:.6e}")
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss

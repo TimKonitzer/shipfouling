@@ -18,7 +18,7 @@ def evaluate(model, loader, device):
         loss = F.kl_div(log_probs, targets, reduction="batchmean")
 
         pred = logits.argmax(dim=1)
-        true = targets.argmax(dim=1)  # majority proxy from soft labels
+        true = targets.argmax(dim=1)
 
         total_loss += float(loss.item()) * images.size(0)
         total_correct += int((pred == true).sum().item())

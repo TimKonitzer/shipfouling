@@ -38,8 +38,8 @@ def parse_single_annotation(ann: Dict[str, Any]) -> Dict[str, Any]:
     extracted = {
         "valid": True,
         "completed_by": ann.get("completed_by"),
-        "grade": None,  # 0..4
-        "confidence_grade": None,  # 0..4
+        "grade": None,
+        "confidence_grade": None,
     }
 
     by_from_name: Dict[str, Dict[str, Any]] = {}
@@ -48,11 +48,11 @@ def parse_single_annotation(ann: Dict[str, Any]) -> Dict[str, Any]:
         if isinstance(fn, str):
             by_from_name[fn] = item
 
-    # grade (e.g. "0 - Clean", "1 - Microfouling")
+
     if "grade" in by_from_name:
         extracted["grade"] = _parse_leading_int(_get_choice(by_from_name["grade"]))
 
-    # confidence for grade (your export uses "confidence")
+
     for key in ["confidence", "grade_confidence", "confidence_grade"]:
         if key in by_from_name:
             extracted["confidence_grade"] = _parse_leading_int(_get_choice(by_from_name[key]))
@@ -74,17 +74,9 @@ def parse_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def soft_label_from_annotations(anns, num_classes: int = NUM_CLASSES):
-    """
-    Soft label distribution over classes 0..4.
-    Confidence-weighted, but robust to your true confidence scale.
-
-    Weighting:
-      - if confidence is present: w = conf / max_conf_in_image
-      - else w = 1.0
-    """
     counts = np.zeros(num_classes, dtype=np.float32)
 
-    # find max confidence present in this image (to normalize)
+
     confs = [
         a.get("confidence_grade")
         for a in anns

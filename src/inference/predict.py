@@ -16,8 +16,6 @@ def build_model_from_checkpoint(ckpt_path: Path, device: str):
     backbone_name = ckpt.get("backbone", "dinov2_vits14")
     num_classes = int(ckpt.get("num_classes", 5))
     img_size = int(ckpt.get("img_size", 224))
-
-    # build backbone – support both DINOv2 (torch.hub) and torchvision ResNet50
     if backbone_name.startswith("dinov2_"):
         backbone = torch.hub.load("facebookresearch/dinov2", backbone_name)
     elif backbone_name == "resnet50":
@@ -32,7 +30,6 @@ def build_model_from_checkpoint(ckpt_path: Path, device: str):
     for p in backbone.parameters():
         p.requires_grad = False
 
-    # infer embed dim
     dummy = torch.randn(1, 3, img_size, img_size)
     with torch.no_grad():
         out = backbone(dummy)
@@ -58,9 +55,9 @@ def build_model_from_checkpoint(ckpt_path: Path, device: str):
 @torch.no_grad()
 def predict_image(model, tf, image_path: Path, device: str) -> Tuple[int, Dict[int, float]]:
     img = Image.open(image_path).convert("RGB")
-    x = tf(img).unsqueeze(0).to(device)  # [1,3,H,W]
-    logits = model(x)  # [1,C]
-    probs = F.softmax(logits, dim=1).squeeze(0).cpu()  # [C]
+    x = tf(img).unsqueeze(0).to(device)
+    logits = model(x)
+    probs = F.softmax(logits, dim=1).squeeze(0).cpu()
     pred = int(torch.argmax(probs).item())
     prob_dict = {i: float(probs[i].item()) for i in range(probs.shape[0])}
     return pred, prob_dict

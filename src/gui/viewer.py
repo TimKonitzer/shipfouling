@@ -37,7 +37,7 @@ class ImageModelViewer(tk.Tk):
         self.model, self.tf, self.model_meta = build_model_from_checkpoint(ckpt_path, self.device)
 
         self.idx = 0
-        self._photo = None  # keep reference
+        self._photo = None
 
         self._build_ui()
         self._bind_keys()
@@ -48,11 +48,9 @@ class ImageModelViewer(tk.Tk):
         self.columnconfigure(1, weight=2)
         self.rowconfigure(0, weight=1)
 
-        # Left: image
         self.image_label = ttk.Label(self)
         self.image_label.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
 
-        # Right: info panel
         right = ttk.Frame(self)
         right.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
         right.rowconfigure(2, weight=1)
@@ -92,7 +90,6 @@ class ImageModelViewer(tk.Tk):
         img_path = self.files[self.idx]
         fname = img_path.name
 
-        # --- model prediction ---
         pred, prob_dict = predict_image(self.model, self.tf, img_path, self.device)
         pred_name = CLASS_NAMES.get(pred, str(pred))
         probs_str = " | ".join([f"{k}:{prob_dict[k]*100:5.1f}%" for k in sorted(prob_dict.keys())])
@@ -100,14 +97,12 @@ class ImageModelViewer(tk.Tk):
         self.title_lbl.config(text=f"[{self.idx+1}/{len(self.files)}] {fname}")
         self.pred_lbl.config(text=f"Prediction: {pred_name}\nProbs: {probs_str}\nDevice: {self.device}")
 
-        # --- annotations display ---
         anns = self.ann_index.get(fname, [])
         lines = []
         if not anns:
             lines.append("No annotations found for this image in label.json.")
         else:
             lines.append(f"Annotations ({len(anns)}):")
-            # nice stable ordering: by completed_by
             anns_sorted = sorted(anns, key=lambda a: (a.get("completed_by") is None, a.get("completed_by")))
             for a in anns_sorted:
                 aid = a.get("completed_by")
@@ -121,7 +116,6 @@ class ImageModelViewer(tk.Tk):
         self.ann_text.insert(tk.END, "\n".join(lines))
         self.ann_text.configure(state="disabled")
 
-        # --- image display (scaled to fit) ---
         pil = Image.open(img_path).convert("RGB")
         max_w, max_h = 800, 760
         pil.thumbnail((max_w, max_h))

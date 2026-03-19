@@ -3,19 +3,16 @@ from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import torch
-from PIL import Image
+from PIL import Image, ImageFile
 from torch.utils.data import Dataset
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 from .labelstudio_parser import parse_entry, soft_label_from_annotations
 
 
 class ShipFoulingDataset(Dataset):
-    """
-    Returns:
-      image_tensor: torch.FloatTensor [3,H,W]
-      target_probs: torch.FloatTensor [5]   (soft labels)
-      meta: dict with filename + etc.
-    """
+
 
     def __init__(
         self,
@@ -40,8 +37,12 @@ class ShipFoulingDataset(Dataset):
 
             img_path = images_dir / fname
             if img_path.exists():
-                self.samples.append((fname, probs))
-            # sonst skip (oder warnen)
+                try:
+                    with Image.open(img_path) as img:
+                        img.verify()
+                    self.samples.append((fname, probs))
+                except Exception as e:
+                    print(f"Skipping corrupt image {img_path}: {e}")
 
         if len(self.samples) == 0:
             raise RuntimeError("No samples found. Check images_dir and label.json filenames.")
@@ -58,7 +59,6 @@ class ShipFoulingDataset(Dataset):
         if self.transform is not None:
             img = self.transform(img)
         else:
-            # fallback: minimal
             img = torch.from_numpy(np.array(img)).permute(2, 0, 1).float() / 255.0
 
         target = torch.tensor(probs, dtype=torch.float32)

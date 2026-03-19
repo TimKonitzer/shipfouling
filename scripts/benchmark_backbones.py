@@ -1,14 +1,3 @@
-"""
-Benchmark script comparing backbone configurations:
-  1. DINOv2  – fully frozen
-  2. ResNet50 – fully frozen
-  3. DINOv2  – last 2 blocks unfrozen
-  4. ResNet50 – last 2 layers unfrozen
-
-Run as:
-  python -m scripts.benchmark_backbones [--epochs 10] [--batch-size 32]
-"""
-
 import argparse
 import time
 from pathlib import Path
@@ -24,10 +13,6 @@ from src.models.dinov2_classifier import LinearClassifier
 from src.training.train_one_epoch import train_one_epoch
 from src.training.eval import evaluate
 
-
-# ---------------------------------------------------------------------------
-# Backbone factories
-# ---------------------------------------------------------------------------
 
 def build_dinov2(unfreeze_last_n: int = 0) -> tuple:
     backbone = torch.hub.load("facebookresearch/dinov2", "dinov2_vits14")
@@ -64,10 +49,6 @@ def get_embed_dim(backbone: torch.nn.Module, img_size: int) -> int:
         out = backbone(dummy)
     return out.shape[-1]
 
-
-# ---------------------------------------------------------------------------
-# Single experiment
-# ---------------------------------------------------------------------------
 
 def run_experiment(name, backbone, backbone_name, train_loader, val_loader,
                    device, epochs, patience, lr, weight_decay, img_size):
@@ -120,10 +101,6 @@ def run_experiment(name, backbone, backbone_name, train_loader, val_loader,
     }
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs",       type=int,   default=10)
@@ -135,8 +112,7 @@ def parse_args():
     parser.add_argument("--img-size",     type=int,   default=224)
     parser.add_argument("--unfreeze-last-n", type=int, default=20,
                         help="Number of backbone params to unfreeze for partial experiments")
-    parser.add_argument("--label-file",   type=str,   default=None,
-                        help="Override label JSON path (default: data/label_final.json)")
+    parser.add_argument("--label-file",   type=str,   default=None)
     return parser.parse_args()
 
 
@@ -197,7 +173,6 @@ def main():
         )
         results.append(result)
 
-    # --- Summary table ---
     print(f"\n{'='*70}")
     print(f"  {'Experiment':<35} {'Val Loss':>9} {'Val Acc':>9} {'Epochs':>7} {'Time(s)':>9}")
     print(f"  {'-'*35} {'-'*9} {'-'*9} {'-'*7} {'-'*9}")

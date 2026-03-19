@@ -2,8 +2,10 @@
 data/images/
 # Local label exports
 /data/*.json
+
 # Local checkpoints
-/checkpoints/dinov2_linear_probe.pt
+/checkpoints/
+
 # Virtual environments
 venv/
 .venv/
@@ -13,9 +15,6 @@ directory/
 # Python cache
 __pycache__/
 *.py[cod]
-
-# Checkpoints
-/checkpoints/
 
 # Data files
 /data/label_final.json
